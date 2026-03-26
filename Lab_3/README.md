@@ -21,7 +21,7 @@ In this lab, you will design and deploy a cross-region medical application archi
 
 
 ## Global Infrastructure for Cloudfront
-![alt text](<Global Users.png>)
+![alt text](<Global Users - Page 1.png>)
 CloudFront serves as the single global entry point and is protected by AWS WAF. Traffic is routed to either the Tokyo or São Paulo Application Load Balancer based on cache behavior and origin configuration. No application servers or databases exist in the global layer.
 
 ## Tokyo Infrastructure

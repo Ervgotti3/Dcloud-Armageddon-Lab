@@ -1,0 +1,110 @@
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+    }
+
+    parameters {
+        choice(name: 'STACK', choices: ['Tokyo', 'Sao_Paulo', 'Global'], description: 'Which stack to run')
+        choice(name: 'ACTION', choices: ['plan', 'apply'], description: 'Terraform action')
+        booleanParam(name: 'ENABLE_SAOPAULO_ACCEPT', defaultValue: false, description: 'Tokyo TGW accept toggle')
+    }
+
+    environment {
+        AWS_DEFAULT_REGION = 'us-east-1'
+        TF_IN_AUTOMATION   = 'true'
+    }
+
+    stages {
+
+        stage('Checkout Code') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Verify Tools') {
+            steps {
+                sh '''
+                  terraform version
+                  aws sts get-caller-identity
+                '''
+            }
+        }
+
+        stage('Terraform Init + Validate + Plan') {
+            steps {
+                script {
+
+                    if (params.STACK == 'Tokyo') {
+                        sh """
+                        terraform -chdir=Lab_3/Tokyo init -input=false
+                        terraform -chdir=Lab_3/Tokyo validate
+                        terraform -chdir=Lab_3/Tokyo plan \
+                          -input=false \
+                          -var="enable_saopaulo_accept=${params.ENABLE_SAOPAULO_ACCEPT}" \
+                          -out=tfplan
+                        """
+                    }
+
+                    if (params.STACK == 'Sao_Paulo') {
+                        sh """
+                        terraform -chdir=Lab_3/Sao_Paulo init -input=false
+                        terraform -chdir=Lab_3/Sao_Paulo validate
+                        terraform -chdir=Lab_3/Sao_Paulo plan -input=false -out=tfplan
+                        """
+                    }
+
+                    if (params.STACK == 'Global') {
+                        sh """
+                        terraform -chdir=Lab_3/Global init -input=false
+                        terraform -chdir=Lab_3/Global validate
+                        terraform -chdir=Lab_3/Global plan -input=false -out=tfplan
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Manual Approval') {
+            when {
+                expression { params.ACTION == 'apply' }
+            }
+            steps {
+                input message: "Apply Terraform for ${params.STACK}?", ok: "Apply"
+            }
+        }
+
+        stage('Terraform Apply') {
+            when {
+                expression { params.ACTION == 'apply' }
+            }
+            steps {
+                script {
+
+                    if (params.STACK == 'Tokyo') {
+                        sh 'terraform -chdir=Lab_3/Tokyo apply -auto-approve tfplan'
+                    }
+
+                    if (params.STACK == 'Sao_Paulo') {
+                        sh 'terraform -chdir=Lab_3/Sao_Paulo apply -auto-approve tfplan'
+                    }
+
+                    if (params.STACK == 'Global') {
+                        sh 'terraform -chdir=Lab_3/Global apply -auto-approve tfplan'
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "SUCCESS: ${params.STACK} ${params.ACTION}"
+        }
+        failure {
+            echo "FAILED: Check logs carefully"
+        }
+    }
+}
